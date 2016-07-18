@@ -1,4 +1,0 @@
-set term png
-set output 'C://Users/Moi/workspace/FUG/plot.png'
-plot cos(x)
-unset output
