@@ -1,3 +1,5 @@
+import java.util.PriorityQueue;
+
 public class Logement {
 
 	/**
@@ -272,6 +274,7 @@ public class Logement {
 	}
 
 	public void analyse(int methode) {
+		PolynomialCurveFitter();
 
 		double cmp;
 		int pol;
@@ -338,10 +341,14 @@ public class Logement {
 	}
 
 	public static void main(String args[]) {
-		// Meilleure réponse
-		Logement l = new Logement(30, 100, 50, 50, 50);
+		// Logement l = new Logement(30, 100, 50, 50, 50);
+		// l.analyse(2);
 
-		l.analyse(2);
+		PriorityQueue<Double> queue = new PriorityQueue<Double>();
+		for (int i = 0; i < 1000; i++)
+			queue.add(Math.random());
 
+		for (int i = 0; i < 1000; i++)
+			System.err.println(queue.poll() + " " + i);
 	}
 }
