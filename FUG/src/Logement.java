@@ -1,15 +1,22 @@
 public class Logement {
 
-	private static double EDF = 1;
+	/**
+	 * Si tous les usagers chauffe de EDF °C, on atteint la limite à partir de
+	 * laquelle le gestionnaire doit payer plus pour le chauffage.
+	 */
+	private static double EDF = 3;
+	private static double PLANCHER = 2;
 
 	private int nombreUsagers;
 	private int nombreStrategies;
 	private Usager usagers[];
 	private double temperatureUsager[];
+	private int politique;
 
 	public Logement(int nu, int nombreStrategies, double proportionEcolos, double proportionPollueurs,
 			double proportionVoyageurs) {
 
+		politique = 1;
 		nombreUsagers = nu;
 		this.nombreStrategies = nombreStrategies;
 		double somme = proportionEcolos + proportionPollueurs + proportionVoyageurs;
@@ -30,7 +37,15 @@ public class Logement {
 			usagers[k].vecteurStochastique(nombreStrategies);
 	}
 
-	public static double consommationIndividuelle(double temperature) {
+	public int setPolitique(int pol) {
+		if (pol > 0 && pol < 0)
+			politique = 0;
+		else
+			politique = pol;
+		return politique;
+	}
+
+	public double consommationIndividuelle(double temperature) {
 		return temperature - Usager.TEMPERATURE_MINIMALE;
 	}
 
@@ -52,12 +67,18 @@ public class Logement {
 		return total;
 	}
 
+	public double prixConsommationTotale(double consommationTotale) {
+		double total = PLANCHER * nombreUsagers;
+
+		if (consommationTotale < EDF * nombreUsagers)
+			return total;
+
+		return total + consommationTotale - EDF * nombreUsagers;
+	}
+
 	public double coutProprietaire() {
-		double tout = consommationTotale();
-		if (tout <= EDF * nombreUsagers)
-			tout = 0;
-		else
-			tout = tout - EDF * nombreUsagers;
+
+		double tout = prixConsommationTotale(consommationTotale());
 
 		for (int i = 0; i < nombreUsagers; i++)
 			tout += usagers[i].poidsPrixTransports() * temperatureToReduction(temperatureUsager[i]);
@@ -71,7 +92,13 @@ public class Logement {
 	}
 
 	public double temperatureToReduction(double temperature) {
-		return Math.exp(Usager.TEMPERATURE_MINIMALE - temperature);
+
+		switch (politique) {
+		case 0:
+			return 0;
+		default:
+			return Math.exp(Usager.TEMPERATURE_MINIMALE - temperature);
+		}
 	}
 
 	/**
@@ -84,7 +111,7 @@ public class Logement {
 	 *         Celui-ci correspond à un équilibre de Nash pur. renvoie null si
 	 *         aucun vecteur n'est trouvé au bout de it itérations.
 	 */
-	public int[] parcours(int[] vecteurDeStrategies, int it) throws Exception {
+	public int[] meilleureReponse(int[] vecteurDeStrategies, int it) throws Exception {
 
 		if (it == 0)
 			throw new Exception("Equilibre de Nash introuvable via un parcours");
@@ -121,7 +148,7 @@ public class Logement {
 
 		for (int i = 0; i < nombreUsagers; i++)
 			if (strategies[i] != vecteurDeStrategies[i])
-				return parcours(strategies, --it);
+				return meilleureReponse(strategies, --it);
 
 		return vecteurDeStrategies;
 
@@ -226,7 +253,9 @@ public class Logement {
 		double facture = 0;
 		for (int j = 0; j < nombreUsagers; j++)
 			facture += consommationIndividuelle(strategieToTemperature(strategies[j], usagers[j]));
+
 		facture /= nombreUsagers;
+
 		return facture;
 	}
 
@@ -239,37 +268,80 @@ public class Logement {
 
 		System.out.println("cout propriétaire " + coutProprietaire());
 		System.out.println();
+
+	}
+
+	public void analyse(int methode) {
+
+		double cmp;
+		int pol;
+
+		switch (methode) {
+		case 1:
+			nashPur();
+			afficherConsommation();
+			cmp = coutProprietaire();
+			pol = politique;
+			setPolitique(0);
+			nashPur();
+			afficherConsommation();
+			System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+			setPolitique(pol);
+			break;
+
+		default:
+		case 2:
+			int[] v = new int[nombreUsagers];
+			for (int i = 0; i < nombreUsagers; i++)
+				v[i] = 0;
+			try {
+				setTemperatureUsagers(meilleureReponse(v, 10000));
+			} catch (Exception e) {
+				e.printStackTrace();
+				return;
+			}
+			afficherConsommation();
+			cmp = coutProprietaire();
+
+			pol = politique;
+			setPolitique(0);
+			for (int i = 0; i < nombreUsagers; i++)
+				v[i] = 0;
+			try {
+				setTemperatureUsagers(meilleureReponse(v, 10000));
+			} catch (Exception e) {
+				e.printStackTrace();
+				return;
+			}
+			afficherConsommation();
+			System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+			setPolitique(pol);
+			return;
+
+		case 3:
+			long startTime = System.currentTimeMillis();
+			while (System.currentTimeMillis() - startTime < 1000)
+				mixedNash();
+			setTemperatureMoyenneUsagers();
+			afficherConsommation();
+			cmp = coutProprietaire();
+			pol = politique;
+			startTime = System.currentTimeMillis();
+			while (System.currentTimeMillis() - startTime < 1000)
+				mixedNash();
+			setTemperatureMoyenneUsagers();
+			afficherConsommation();
+			System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+			setPolitique(pol);
+			return;
+		}
 	}
 
 	public static void main(String args[]) {
-		// Nash pur
+		// Meilleure réponse
+		Logement l = new Logement(30, 100, 50, 50, 50);
 
-		Logement l = new Logement(5, 10, 50, 50, 50);
-		l.setTemperatureUsagers(l.nashPur());
+		l.analyse(2);
 
-		l.afficherConsommation();
-
-		// Parcours
-		l = new Logement(150, 100, 50, 50, 50);
-		int[] v = new int[l.nombreUsagers];
-		for (int i = 0; i < l.nombreUsagers; i++)
-			v[i] = 0;
-		try {
-			l.setTemperatureUsagers(l.parcours(v, 10000));
-		} catch (Exception e) {
-			e.printStackTrace();
-			return;
-		}
-		l.afficherConsommation();
-
-		// Mixed Nash
-
-		l = new Logement(1, 10, 50, 0, 0);
-
-		long startTime = System.currentTimeMillis();
-		while (System.currentTimeMillis() - startTime < 1000)
-			l.mixedNash();
-		l.setTemperatureMoyenneUsagers();
-		l.afficherConsommation();
 	}
 }

@@ -80,7 +80,7 @@ public class Usager {
 			definirUsager(22, 0, 0, 1);
 			break;
 		case VOYAGEUR:
-			definirUsager(22, 0, 1, 0);
+			definirUsager(22, 0, 100, 1);
 			break;
 		default:
 			type = Type.INDEFINI;
@@ -177,5 +177,4 @@ public class Usager {
 	public double temperatureIdeale() {
 		return temperatureIdeale;
 	}
-
 }
