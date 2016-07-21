@@ -34,6 +34,16 @@ public class Logement {
 		return temperature - Usager.TEMPERATURE_MINIMALE;
 	}
 
+	public void setTemperatureMoyenneUsagers() {
+		temperatureUsager = new double[nombreUsagers];
+		for (int i = 0; i < nombreUsagers; i++) {
+			temperatureUsager[i] = 0;
+			double[] tmp = usagers[i].mixedNash();
+			for (int j = 0; j < nombreStrategies; j++)
+				temperatureUsager[i] += strategieToTemperature(j, usagers[i]) * tmp[j] / usagers[i].mixedNashSum();
+		}
+	}
+
 	public double consommationTotale() {
 		double total = 0;
 		for (double d : temperatureUsager) {
@@ -55,19 +65,13 @@ public class Logement {
 		return tout;
 	}
 
-	public double coutMoyenProprietaire() {
-		// TODO
-		return 0;
-	}
-
-	public double strategieToTemperature(int strat) {
+	public double strategieToTemperature(int strat, Usager u) {
 		return Usager.TEMPERATURE_MINIMALE
-				+ strat * (Usager.TEMPERATURE_MAXIMALE - Usager.TEMPERATURE_MINIMALE) / (nombreStrategies - 1);
+				+ strat * (u.temperatureIdeale() - Usager.TEMPERATURE_MINIMALE) / (nombreStrategies - 1);
 	}
 
 	public double temperatureToReduction(double temperature) {
-		return 1 - (temperature - Usager.TEMPERATURE_MINIMALE)
-				/ (Usager.TEMPERATURE_MAXIMALE - Usager.TEMPERATURE_MINIMALE);
+		return Math.exp(Usager.TEMPERATURE_MINIMALE - temperature);
 	}
 
 	/**
@@ -94,21 +98,19 @@ public class Logement {
 
 		double utilite[] = new double[nombreUsagers];
 		for (int i = 0; i < nombreUsagers; i++) {
-			utilite[i] = usagers[i].utiliteTotale(strategieToTemperature(vecteurDeStrategies[i]), facture,
-					temperatureToReduction(strategieToTemperature(vecteurDeStrategies[i])));
+			utilite[i] = usagers[i].utiliteTotale(strategieToTemperature(vecteurDeStrategies[i], usagers[i]), facture,
+					temperatureToReduction(strategieToTemperature(vecteurDeStrategies[i], usagers[i])));
 
 			utiliteMax = utilite[i];
 
 			for (int k = 0; k < nombreStrategies; k++) {
 
 				double tmp = usagers[i]
-						.utiliteTotale(
-								strategieToTemperature(
-										k),
-								facture - (consommationIndividuelle(strategieToTemperature(vecteurDeStrategies[i]))
-										/ nombreUsagers)
-								+ (consommationIndividuelle(strategieToTemperature(k)) / nombreUsagers),
-						strategieToReduction(k));
+						.utiliteTotale(strategieToTemperature(k, usagers[i]),
+								facture - (consommationIndividuelle(
+										strategieToTemperature(vecteurDeStrategies[i], usagers[i])) / nombreUsagers)
+								+ (consommationIndividuelle(strategieToTemperature(k, usagers[i])) / nombreUsagers),
+						strategieToReduction(k, usagers[i]));
 
 				if (utiliteMax < tmp) {
 					strategies[i] = k;
@@ -140,8 +142,8 @@ public class Logement {
 			double facture = factureIndividuelle(strategies);
 
 			for (int j = 0; j < nombreUsagers; j++)
-				utilite[i][j] = usagers[j].utiliteTotale(strategieToTemperature(strategies[j]), facture,
-						strategieToReduction(strategies[j]));
+				utilite[i][j] = usagers[j].utiliteTotale(strategieToTemperature(strategies[j], usagers[j]), facture,
+						strategieToReduction(strategies[j], usagers[j]));
 
 			strategies[aiguille]++;
 			if (strategies[aiguille] == nombreStrategies) {
@@ -189,7 +191,7 @@ public class Logement {
 	private void setTemperatureUsagers(int[] vecteur) {
 		temperatureUsager = new double[nombreUsagers];
 		for (int i = 0; i < nombreUsagers; i++) {
-			temperatureUsager[i] = strategieToTemperature(vecteur[i]);
+			temperatureUsager[i] = strategieToTemperature(vecteur[i], usagers[i]);
 		}
 	}
 
@@ -205,8 +207,9 @@ public class Logement {
 		double changement = 0;
 		double sum = 0;
 		for (int i = 0; i < nombreUsagers; i++) {
-			changement += usagers[i].updateStochastique(strategies[i], usagers[i].utiliteTotale(
-					strategieToTemperature(strategies[i]), facture, strategieToReduction(strategies[i])));
+			changement += usagers[i].updateStochastique(strategies[i],
+					usagers[i].utiliteTotale(strategieToTemperature(strategies[i], usagers[i]), facture,
+							strategieToReduction(strategies[i], usagers[i])));
 			sum += usagers[i].mixedNashSum();
 		}
 
@@ -214,15 +217,15 @@ public class Logement {
 
 	}
 
-	public double strategieToReduction(int strat) {
-		return temperatureToReduction(strategieToTemperature(strat));
+	public double strategieToReduction(int strat, Usager u) {
+		return temperatureToReduction(strategieToTemperature(strat, u));
 	}
 
 	public double factureIndividuelle(int[] strategies) {
 
 		double facture = 0;
 		for (int j = 0; j < nombreUsagers; j++)
-			facture += consommationIndividuelle(strategieToTemperature(strategies[j]));
+			facture += consommationIndividuelle(strategieToTemperature(strategies[j], usagers[j]));
 		facture /= nombreUsagers;
 		return facture;
 	}
@@ -238,26 +241,6 @@ public class Logement {
 		System.out.println();
 	}
 
-	private void afficherConsommationMoyenne() {
-
-		double[] stochastique;
-		double sum = -Usager.TEMPERATURE_MINIMALE * nombreUsagers;
-
-		for (int i = 0; i < nombreUsagers; i++) {
-			stochastique = usagers[i].mixedNash();
-			double avg = Usager.TEMPERATURE_MINIMALE;
-
-			for (int k = 0; k < nombreStrategies; k++)
-				avg += consommationIndividuelle(strategieToTemperature(k)) * stochastique[k]
-						/ usagers[i].mixedNashSum();
-
-			System.out.println(usagers[i].type() + " température moyenne " + avg);
-			sum += avg;
-		}
-
-		System.out.println("consommation totale moyenne " + sum + "\n");
-	}
-
 	public static void main(String args[]) {
 		// Nash pur
 
@@ -267,7 +250,7 @@ public class Logement {
 		l.afficherConsommation();
 
 		// Parcours
-		l = new Logement(5, 100, 50, 50, 50);
+		l = new Logement(150, 100, 50, 50, 50);
 		int[] v = new int[l.nombreUsagers];
 		for (int i = 0; i < l.nombreUsagers; i++)
 			v[i] = 0;
@@ -286,6 +269,7 @@ public class Logement {
 		long startTime = System.currentTimeMillis();
 		while (System.currentTimeMillis() - startTime < 1000)
 			l.mixedNash();
-		l.afficherConsommationMoyenne();
+		l.setTemperatureMoyenneUsagers();
+		l.afficherConsommation();
 	}
 }

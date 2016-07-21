@@ -8,7 +8,9 @@ public class Usager {
 	}
 
 	public static final double TEMPERATURE_MINIMALE = 15;
-	public static final double TEMPERATURE_MAXIMALE = 25;
+	public static final double MULTIPLICATEUR_REDUCTION = 5;
+	public static final double TOLERANCE_THERMIQUE = 0.05;
+	public static final double RICHESSE = 1;
 
 	private Type type;
 	private double temperatureIdeale;
@@ -78,7 +80,7 @@ public class Usager {
 			definirUsager(22, 0, 0, 1);
 			break;
 		case VOYAGEUR:
-			definirUsager(20, 0, 1, 0);
+			definirUsager(22, 0, 1, 0);
 			break;
 		default:
 			type = Type.INDEFINI;
@@ -99,7 +101,7 @@ public class Usager {
 	 * f(1) = 1.
 	 */
 	private double utiliteReductionTransports(double reduction) {
-		return (1 - Math.exp(-reduction)) / (1 - Math.exp(-1));
+		return (1 - Math.exp(-reduction * MULTIPLICATEUR_REDUCTION)) / (1 - Math.exp(-MULTIPLICATEUR_REDUCTION));
 	}
 
 	/**
@@ -107,27 +109,25 @@ public class Usager {
 	 * f(+infini) = 0.
 	 */
 	private double utilitePrixChauffage(double facture) {
-		double richesse = 1;
-		return Math.exp(-facture / richesse);
+		return Math.exp(-facture / RICHESSE);
 	}
 
 	/**
-	 * renvoie une température normalisée entre 0 et 1.
+	 * renvoie une température normalisée entre 0 et 1. 0 = température minimale
+	 * 1 = température idéale
 	 */
 	private double normaliseTemperature(double temp) {
-		return (temp - TEMPERATURE_MINIMALE) / (TEMPERATURE_MAXIMALE - TEMPERATURE_MINIMALE);
+		return (temp - TEMPERATURE_MINIMALE) / (temperatureIdeale - TEMPERATURE_MINIMALE);
 	}
 
 	/**
 	 * La courbe d'utilité est une courbe de Gauss.
 	 */
 	private double utiliteTemperature(double temperature) {
-
-		double toleranceThermique = 0.05;
 		temperature = normaliseTemperature(temperature);
 		double ti = normaliseTemperature(temperatureIdeale);
 
-		return Math.exp(-(Math.pow(ti - temperature, 2) / toleranceThermique));
+		return Math.exp(-(Math.pow(ti - temperature, 2) / TOLERANCE_THERMIQUE));
 	}
 
 	@Override
@@ -172,6 +172,10 @@ public class Usager {
 
 	public double poidsPrixTransports() {
 		return poidsPrixTransports / (poidsConfort + poidsPrixChauffage + poidsPrixTransports);
+	}
+
+	public double temperatureIdeale() {
+		return temperatureIdeale;
 	}
 
 }
