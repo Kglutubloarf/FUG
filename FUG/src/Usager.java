@@ -153,13 +153,17 @@ public class Usager {
 	 * @return la différence entre l'ancienne valeur contenue dans le vecteur
 	 *         stochastique et la nouvelle.
 	 */
-	public double updateStochastique(int strat, double utiliteTotale) {
+	public void updateStochastique(int strat, double utiliteTotale, double b, double utilitePrecedente) {
 
-		double multiplicateur = 2;
+		if (utiliteTotale < utilitePrecedente)
+			return;
 
-		mixedNash[strat] += multiplicateur * utiliteTotale / nombreStrategies;
-		mixedNashSum += multiplicateur * utiliteTotale / nombreStrategies;
-		return utiliteTotale;
+		double gain = utiliteTotale * b;
+		for (int i = 0; i < nombreStrategies; i++)
+			if (i != strat) {
+				mixedNash[i] -= gain * mixedNash[i];
+			}
+		mixedNash[strat] += gain * (1 - mixedNash[strat]);
 	}
 
 	public double mixedNashSum() {
@@ -176,5 +180,18 @@ public class Usager {
 
 	public double temperatureIdeale() {
 		return temperatureIdeale;
+	}
+
+	public int getPureFromStochastique(double limite) {
+		for (int i = 0; i < nombreStrategies; i++)
+			if (mixedNash[i] > (1 - limite) * mixedNashSum)
+				return i;
+
+		new Exception().printStackTrace();
+		return -1;
+	}
+
+	public double probabilite(int i) {
+		return mixedNash[i];
 	}
 }

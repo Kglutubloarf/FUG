@@ -1,7 +1,6 @@
-import java.util.PriorityQueue;
-
 public class Logement {
 
+	private static double MIXED_NASH_PRECISION = 0.00001;
 	/**
 	 * Si tous les usagers chauffe de EDF °C, on atteint la limite à partir de
 	 * laquelle le gestionnaire doit payer plus pour le chauffage.
@@ -224,7 +223,7 @@ public class Logement {
 		}
 	}
 
-	public double mixedNash() {
+	public double[] mixedNash(double b, double[] utilitePrecedente) {
 		int strategies[] = new int[nombreUsagers];
 		for (int i = 0; i < nombreUsagers; i++) {
 			double tmp = Math.random();
@@ -232,17 +231,21 @@ public class Logement {
 		}
 
 		double facture = factureIndividuelle(strategies);
+		boolean stop = true;
 
-		double changement = 0;
-		double sum = 0;
 		for (int i = 0; i < nombreUsagers; i++) {
-			changement += usagers[i].updateStochastique(strategies[i],
-					usagers[i].utiliteTotale(strategieToTemperature(strategies[i], usagers[i]), facture,
-							strategieToReduction(strategies[i], usagers[i])));
-			sum += usagers[i].mixedNashSum();
+			double utiliteTotale = usagers[i].utiliteTotale(strategieToTemperature(strategies[i], usagers[i]), facture,
+					strategieToReduction(strategies[i], usagers[i]));
+			usagers[i].updateStochastique(strategies[i], utiliteTotale, b, utilitePrecedente[i]);
+			if (usagers[i].probabilite(strategies[i]) < 1 - MIXED_NASH_PRECISION)
+				stop = false;
+			utilitePrecedente[i] = utiliteTotale;
 		}
 
-		return changement / sum;
+		if (stop)
+			return null;
+
+		return utilitePrecedente;
 
 	}
 
@@ -274,7 +277,6 @@ public class Logement {
 	}
 
 	public void analyse(int methode) {
-		PolynomialCurveFitter();
 
 		double cmp;
 		int pol;
@@ -286,9 +288,10 @@ public class Logement {
 			cmp = coutProprietaire();
 			pol = politique;
 			setPolitique(0);
-			nashPur();
-			afficherConsommation();
-			System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+			if (pol != 0) {
+				analyse(1);
+				System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+			}
 			setPolitique(pol);
 			break;
 
@@ -308,47 +311,103 @@ public class Logement {
 
 			pol = politique;
 			setPolitique(0);
-			for (int i = 0; i < nombreUsagers; i++)
-				v[i] = 0;
-			try {
-				setTemperatureUsagers(meilleureReponse(v, 10000));
-			} catch (Exception e) {
-				e.printStackTrace();
-				return;
+			if (pol != 0) {
+				analyse(2);
+				System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
 			}
-			afficherConsommation();
-			System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
 			setPolitique(pol);
 			return;
 
 		case 3:
-			long startTime = System.currentTimeMillis();
-			while (System.currentTimeMillis() - startTime < 1000)
-				mixedNash();
+			double b = 0.5;
+			boolean nashFound = false;
+			int testNash[] = new int[nombreUsagers];
+
+			while (!nashFound) {
+				double[] utilite = new double[nombreUsagers];
+				for (int i = 0; i < nombreUsagers; i++)
+					utilite[i] = 0;
+
+				for (int i = 0; i < nombreUsagers; i++)
+					usagers[i].vecteurStochastique(nombreStrategies);
+
+				while (utilite != null) {
+					utilite = mixedNash(b, utilite);
+				}
+
+				for (int i = 0; i < nombreUsagers; i++)
+					testNash[i] = usagers[i].getPureFromStochastique(MIXED_NASH_PRECISION);
+
+				nashFound = testMixedNash(testNash);
+				b /= 2;
+				if (b == 0) {
+					MIXED_NASH_PRECISION /= 10;
+					b = 0.01;
+				}
+				System.err.println(b);
+			}
+			System.err.println(b);
 			setTemperatureMoyenneUsagers();
 			afficherConsommation();
 			cmp = coutProprietaire();
 			pol = politique;
-			startTime = System.currentTimeMillis();
-			while (System.currentTimeMillis() - startTime < 1000)
-				mixedNash();
-			setTemperatureMoyenneUsagers();
-			afficherConsommation();
-			System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+			setPolitique(0);
+			if (pol != 0) {
+				analyse(3);
+				System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+			}
 			setPolitique(pol);
 			return;
 		}
 	}
 
+	private boolean testMixedNash(int[] testNash) {
+		double facture = factureIndividuelle(testNash);
+
+		double utiliteMax;
+		int strategies[] = new int[nombreUsagers];
+		for (int i = 0; i < nombreUsagers; i++)
+			strategies[i] = testNash[i];
+
+		double utilite[] = new double[nombreUsagers];
+		for (int i = 0; i < nombreUsagers; i++) {
+			utilite[i] = usagers[i].utiliteTotale(strategieToTemperature(testNash[i], usagers[i]), facture,
+					temperatureToReduction(strategieToTemperature(testNash[i], usagers[i])));
+
+			utiliteMax = utilite[i];
+
+			for (int k = 0; k < nombreStrategies; k++) {
+
+				double tmp = usagers[i].utiliteTotale(strategieToTemperature(k, usagers[i]),
+						facture - (consommationIndividuelle(strategieToTemperature(testNash[i], usagers[i]))
+								/ nombreUsagers)
+						+ (consommationIndividuelle(strategieToTemperature(k, usagers[i])) / nombreUsagers),
+						strategieToReduction(k, usagers[i]));
+
+				if (utiliteMax < tmp) {
+					strategies[i] = k;
+					utiliteMax = tmp;
+				}
+			}
+		}
+
+		for (int i = 0; i < nombreUsagers; i++)
+			if (strategies[i] != testNash[i])
+				return false;
+
+		return true;
+	}
+
 	public static void main(String args[]) {
-		// Logement l = new Logement(30, 100, 50, 50, 50);
-		// l.analyse(2);
+		Logement l = new Logement(3, 5, 50, 50, 50);
+		l.analyse(3);
 
-		PriorityQueue<Double> queue = new PriorityQueue<Double>();
-		for (int i = 0; i < 1000; i++)
-			queue.add(Math.random());
+		// PriorityQueue<Double> queue = new PriorityQueue<Double>();
+		// for (int i = 0; i < 20; i++)
+		// queue.add(Math.random());
+		//
+		// for (int i = 0; i < 20; i++)
+		// System.err.println(queue.poll() + " " + i);
 
-		for (int i = 0; i < 1000; i++)
-			System.err.println(queue.poll() + " " + i);
 	}
 }
