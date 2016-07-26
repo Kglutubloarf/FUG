@@ -1,6 +1,12 @@
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.util.Random;
+
 public class Logement {
 
-	private static double MIXED_NASH_PRECISION = 0.00001;
+	private static double TEMPERATURE_MAX = 25;
+	private static double MIXED_NASH_PRECISION = 0.001;
+	private static int PAS_COURBE_REDUCTION = 100;
 	/**
 	 * Si tous les usagers chauffe de EDF °C, on atteint la limite à partir de
 	 * laquelle le gestionnaire doit payer plus pour le chauffage.
@@ -13,6 +19,7 @@ public class Logement {
 	private Usager usagers[];
 	private double temperatureUsager[];
 	private int politique;
+	private double courbeReduction[];
 
 	public Logement(int nu, int nombreStrategies, double proportionEcolos, double proportionPollueurs,
 			double proportionVoyageurs) {
@@ -38,12 +45,8 @@ public class Logement {
 			usagers[k].vecteurStochastique(nombreStrategies);
 	}
 
-	public int setPolitique(int pol) {
-		if (pol > 0 && pol < 0)
-			politique = 0;
-		else
-			politique = pol;
-		return politique;
+	public void setPolitique(int pol) {
+		politique = pol;
 	}
 
 	public double consommationIndividuelle(double temperature) {
@@ -97,6 +100,9 @@ public class Logement {
 		switch (politique) {
 		case 0:
 			return 0;
+		case 1:
+			return courbeReduction[(int) (PAS_COURBE_REDUCTION * (temperature - Usager.TEMPERATURE_MINIMALE)
+					/ (TEMPERATURE_MAX - Usager.TEMPERATURE_MINIMALE))];
 		default:
 			return Math.exp(Usager.TEMPERATURE_MINIMALE - temperature);
 		}
@@ -276,7 +282,7 @@ public class Logement {
 
 	}
 
-	public void analyse(int methode) {
+	public double analyse(int methode, int temperatureExterieure, boolean showResult) {
 
 		double cmp;
 		int pol;
@@ -284,16 +290,18 @@ public class Logement {
 		switch (methode) {
 		case 1:
 			nashPur();
-			afficherConsommation();
+			if (showResult)
+				afficherConsommation();
 			cmp = coutProprietaire();
 			pol = politique;
 			setPolitique(0);
 			if (pol != 0) {
-				analyse(1);
-				System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+				analyse(1, temperatureExterieure, showResult);
+				if (showResult)
+					System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
 			}
 			setPolitique(pol);
-			break;
+			return coutProprietaire() - cmp;
 
 		default:
 		case 2:
@@ -304,22 +312,24 @@ public class Logement {
 				setTemperatureUsagers(meilleureReponse(v, 10000));
 			} catch (Exception e) {
 				e.printStackTrace();
-				return;
+				return -1;
 			}
-			afficherConsommation();
+			if (showResult)
+				afficherConsommation();
 			cmp = coutProprietaire();
 
 			pol = politique;
 			setPolitique(0);
 			if (pol != 0) {
-				analyse(2);
-				System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+				analyse(2, temperatureExterieure, showResult);
+				if (showResult)
+					System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
 			}
 			setPolitique(pol);
-			return;
+			return coutProprietaire() - cmp;
 
 		case 3:
-			double b = 0.5;
+			double b = 0.01;
 			boolean nashFound = false;
 			int testNash[] = new int[nombreUsagers];
 
@@ -343,21 +353,22 @@ public class Logement {
 				if (b == 0) {
 					MIXED_NASH_PRECISION /= 10;
 					b = 0.01;
+					System.err.println("FUG");
 				}
-				System.err.println(b);
 			}
-			System.err.println(b);
 			setTemperatureMoyenneUsagers();
-			afficherConsommation();
+			if (showResult)
+				afficherConsommation();
 			cmp = coutProprietaire();
 			pol = politique;
 			setPolitique(0);
 			if (pol != 0) {
-				analyse(3);
-				System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
+				analyse(3, temperatureExterieure, showResult);
+				if (showResult)
+					System.out.println("gain dû à la réduction " + (coutProprietaire() - cmp));
 			}
 			setPolitique(pol);
-			return;
+			return coutProprietaire() - cmp;
 		}
 	}
 
@@ -398,16 +409,65 @@ public class Logement {
 		return true;
 	}
 
+	/**
+	 * @param max
+	 *            f(0) = max.
+	 * @param seed
+	 *            la seed aléatoire générant la courbe.
+	 * @return true si la courbe n'est pas affine
+	 */
+	public boolean setCourbeReduction(double max, long seed) {
+		Random r = new Random(seed);
+
+		courbeReduction = new double[PAS_COURBE_REDUCTION];
+		for (int i = 0; i < PAS_COURBE_REDUCTION; i++)
+			courbeReduction[i] = 0;
+
+		for (int i = 0; i < PAS_COURBE_REDUCTION; i++)
+			for (int k = r.nextInt(100); k >= 0; k--)
+				courbeReduction[k] += 1 / (double) PAS_COURBE_REDUCTION * max;
+		return true;
+	}
+
 	public static void main(String args[]) {
-		Logement l = new Logement(3, 5, 50, 50, 50);
-		l.analyse(3);
+		Logement l = new Logement(30, 50, 50, 50, 50);
+		l.setPolitique(1);
+		double gainMax = Double.MIN_NORMAL;
+		double gain;
+		long seed;
+		long bestSeed = -1;
+		double bestAlpha = -1;
+		Random rand = new java.util.Random();
 
-		// PriorityQueue<Double> queue = new PriorityQueue<Double>();
-		// for (int i = 0; i < 20; i++)
-		// queue.add(Math.random());
-		//
-		// for (int i = 0; i < 20; i++)
-		// System.err.println(queue.poll() + " " + i);
+		for (int k = 20; k <= 20; k++)
+			for (int i = 0; i < 1; i++) {
+				seed = rand.nextLong();
+				if (l.setCourbeReduction(k / (double) 20, seed)) {
+					gain = l.analyse(2, 10, false);
+					if (gain > gainMax) {
+						gainMax = gain;
+						bestAlpha = k / (double) 20;
+						bestSeed = seed;
+					}
+				} else
+					i--;
+			}
 
+		l.setCourbeReduction(bestAlpha, bestSeed);
+		PrintWriter pw;
+		try {
+			pw = new PrintWriter("C:\\Users\\Moi\\git\\FUG\\FUG\\bin\\a.txt");
+			for (int i = 0; i < PAS_COURBE_REDUCTION; i++)
+				pw.println(Usager.TEMPERATURE_MINIMALE
+						+ (TEMPERATURE_MAX - Usager.TEMPERATURE_MINIMALE) * i / PAS_COURBE_REDUCTION + " "
+						+ l.courbeReduction[i]);
+			pw.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+
+		System.out.println("Alpha " + bestAlpha + ", Seed " + bestSeed + ", gain " + gainMax);
+		l.setPolitique(1);
+		l.analyse(2, 10, true);
 	}
 }

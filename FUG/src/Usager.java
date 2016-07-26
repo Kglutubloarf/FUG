@@ -77,7 +77,7 @@ public class Usager {
 			definirUsager(17, 1, 0, 0);
 			break;
 		case POLLUEUR:
-			definirUsager(22, 0, 0, 1);
+			definirUsager(24.5, 0, 0, 1);
 			break;
 		case VOYAGEUR:
 			definirUsager(22, 0, 100, 1);

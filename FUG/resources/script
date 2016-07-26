@@ -1,4 +1,0 @@
-set term png
-set output 'plot.png'
-plot x
-unset output
