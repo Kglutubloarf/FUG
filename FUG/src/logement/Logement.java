@@ -3,10 +3,12 @@ package logement;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.Random;
 
 import usager.Ecolo;
+import usager.Fou;
 import usager.Pollueur;
 import usager.Usager;
 import usager.Voyageur;
@@ -72,7 +74,7 @@ public class Logement {
 	 * La température maximale à laquelle les usagers peuvent chauffer leur
 	 * logement.
 	 */
-	private static final double TEMPERATURE_MAX = 25;
+	public static final double TEMPERATURE_MAX = 25;
 	/**
 	 * dans un algorithme LRI, si pour chaque usager, il existe une stratégie de
 	 * probabilité proche de 1 (distance < LRI_PRECISION), on teste s'il s'agit
@@ -129,7 +131,7 @@ public class Logement {
 	 * @param nombrePollueurs
 	 * @param nombreVoyageurs
 	 */
-	public Logement(int nombreStrategies, int nombreEcolos, int nombrePollueurs, int nombreVoyageurs) {
+	public Logement(int nombreStrategies, int nombreEcolos, int nombrePollueurs, int nombreVoyageurs, int nombreFous) {
 
 		// On initialise toutes les variables
 		temperatureExterieure = 12.5;
@@ -143,7 +145,7 @@ public class Logement {
 					.printStackTrace();
 
 		this.nombreStrategies = nombreStrategies;
-		nombreUsagers = nombreEcolos + nombrePollueurs + nombreVoyageurs;
+		nombreUsagers = nombreEcolos + nombrePollueurs + nombreVoyageurs + nombreFous;
 		usagers = new Usager[nombreUsagers];
 
 		// On initialise les usagers en fonction de leur type.
@@ -159,6 +161,9 @@ public class Logement {
 
 		for (j = i; i < j + nombrePollueurs; i++)
 			usagers[i] = new Pollueur();
+
+		for (j = i; i < j + nombreFous; i++)
+			usagers[i] = new Fou();
 
 		// On initialise les vecteurs stochastiques de chaque usager.
 		for (int k = 0; k < nombreUsagers; k++)
@@ -499,15 +504,14 @@ public class Logement {
 	 * consommation totale des usagers et le cout pour le propriétaire, incluant
 	 * les réductions à payer.
 	 */
-	public void afficherConsommation() {
-
+	public void afficherConsommation(PrintStream out) {
 		for (int i = 0; i < nombreUsagers; i++)
-			System.out.println(usagers[i].toString() + " température "
+			out.println(usagers[i].toString() + " température "
 					+ (temperatureExterieure + consommationIndividuelle(temperatureUsager[i])));
-		System.out.println("consommation totale " + consommationTotale());
+		out.println("consommation totale " + consommationTotale());
 
-		System.out.println("coût propriétaire " + coutProprietaire());
-		System.out.println();
+		out.println("coût propriétaire " + coutProprietaire());
+		out.println();
 	}
 
 	/**
@@ -669,7 +673,7 @@ public class Logement {
 	 *            Pour chaque maximum, on teste ce nombre de fonctions
 	 *            distinctes.
 	 */
-	public void monteCarlo(int alphaDistincts, int testParAlphaVal) {
+	public void monteCarlo(int alphaDistincts, int testParAlphaVal, PrintStream out) {
 		Politique pol = politique;
 		setPolitique(Politique.AUCUNEREDUCTION);
 		analyse();
@@ -723,7 +727,22 @@ public class Logement {
 			e.printStackTrace();
 		}
 
-		System.out.println("Alpha " + bestAlpha + ", Seed " + bestSeed);
+		out.println("Alpha " + bestAlpha + ", Seed " + bestSeed);
+	}
+
+	/**
+	 * @return le gain d'argent obtenu grâce à la réduction.
+	 */
+	public void comparerSansReduction(PrintStream sortie) {
+		double cmp;
+		analyse();
+		afficherConsommation(sortie);
+		cmp = coutProprietaire();
+		setPolitique(Logement.Politique.AUCUNEREDUCTION);
+		analyse();
+		sortie.println("Comportements des usagers sans réduction : ");
+		afficherConsommation(sortie);
+		sortie.println("gain dû à la réduction " + (coutProprietaire() - cmp));
 	}
 
 	/**

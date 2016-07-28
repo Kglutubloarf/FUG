@@ -9,6 +9,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.text.ParseException;
 
 import javax.imageio.ImageIO;
@@ -26,6 +27,7 @@ public class Fenetre {
 
 	public static final int largeurCanvas = 800;
 	public static final int hauteurCanvas = 600;
+	public final PrintStream sortie;
 
 	JFrame frame;
 	JFormattedTextField temperatureExterieure;
@@ -33,12 +35,14 @@ public class Fenetre {
 	JFormattedTextField nombreEcolos;
 	JFormattedTextField nombrePollueurs;
 	JFormattedTextField nombreVoyageurs;
+	JFormattedTextField nombreFous;
 	JComboBox<Logement.Politique> politique;
 	JComboBox<Logement.Methode> methode;
 
 	Logement l;
 
-	public Fenetre() {
+	public Fenetre(PrintStream sortie) {
+		this.sortie = sortie;
 		frame = new JFrame();
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
@@ -49,6 +53,7 @@ public class Fenetre {
 		nombreEcolos = new JFormattedTextField(10);
 		nombrePollueurs = new JFormattedTextField(10);
 		nombreVoyageurs = new JFormattedTextField(10);
+		nombreFous = new JFormattedTextField(0);
 
 		politique = new JComboBox<>(new Logement.Politique[] { Logement.Politique.MONTECARLO, Logement.Politique.TEST,
 				Logement.Politique.AUCUNEREDUCTION });
@@ -74,6 +79,9 @@ public class Fenetre {
 		frame.add(new JLabel("nombre de voyageurs : "));
 		frame.add(nombreVoyageurs, BorderLayout.CENTER);
 
+		frame.add(new JLabel("nombre de fous : "));
+		frame.add(nombreFous, BorderLayout.CENTER);
+
 		frame.add(new JLabel("politique de réduction : "));
 		frame.add(politique, BorderLayout.CENTER);
 
@@ -82,7 +90,7 @@ public class Fenetre {
 
 		// On finalise la création de la fenêtre
 
-		JButton ok = new JButton("OK");
+		JButton ok = new JButton("analyser avec ces paramètres");
 		ok.addActionListener(new ActionListener() {
 
 			@Override
@@ -97,6 +105,7 @@ public class Fenetre {
 					nombreEcolos.commitEdit();
 					nombrePollueurs.commitEdit();
 					nombreVoyageurs.commitEdit();
+					nombreFous.commitEdit();
 				} catch (ParseException e1) {
 					e1.printStackTrace();
 				}
@@ -105,7 +114,8 @@ public class Fenetre {
 				// différents champs.
 
 				l = new Logement((int) nombreDeStrategies.getValue(), (int) nombreEcolos.getValue(),
-						(int) nombrePollueurs.getValue(), (int) nombreVoyageurs.getValue());
+						(int) nombrePollueurs.getValue(), (int) nombreVoyageurs.getValue(),
+						(int) nombreFous.getValue());
 
 				l.setPolitique((Logement.Politique) politique.getSelectedItem());
 				l.setTemperatureExterieure((double) temperatureExterieure.getValue());
@@ -114,7 +124,7 @@ public class Fenetre {
 				// On lance la simulation
 
 				if (l.politique() == Logement.Politique.MONTECARLO) {
-					l.monteCarlo(10, 10);
+					l.monteCarlo(10, 10, sortie);
 
 					// Si on cherche une courbe de réduction en suivant la
 					// méthode de Monte-Carlo, on trace cette courbe après
@@ -135,17 +145,10 @@ public class Fenetre {
 				// et les gains obtenus par le gestionnaire grâce à la
 				// réduction.
 
-				double cmp;
-				l.analyse();
-				l.afficherConsommation();
-				cmp = l.coutProprietaire();
-				l.setPolitique(Logement.Politique.AUCUNEREDUCTION);
-				l.analyse();
-				System.out.println("Comportements des usagers sans réduction : ");
-				l.afficherConsommation();
-				System.out.println("gain dû à la réduction " + (l.coutProprietaire() - cmp));
+				l.comparerSansReduction(sortie);
 			}
 		});
+
 		frame.add(ok);
 
 		frame.pack();
@@ -181,6 +184,6 @@ public class Fenetre {
 	}
 
 	public static void main(String argv[]) {
-		new Fenetre();
+		new Fenetre(System.out);
 	}
 }
